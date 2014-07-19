@@ -7,6 +7,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -17,29 +18,35 @@ var (
 func traverseDirectories() {
 
 	db, err := sql.Open("mysql", "root:everythingisawesome@localhost:3306/seeitremix")
-
-	defer db.Close()
-
-	tweetDirectories, err := ioutil.ReadDir(queueDir)
 	if err != nil {
+		fmt.Print(err)
 		os.Exit(1)
 	}
 
+	defer db.Close()
+
+	tweetDirectories, _ := ioutil.ReadDir(queueDir)
+
 	for _, tweetdirectory := range tweetDirectories {
 		if tweetdirectory.IsDir() && strings.Contains(tweetdirectory.Name(), "tweet") {
-			sparkfiles, err := ioutil.ReadDir(tweetdirectory.Name())
+			fmt.Print(filepath.Join(queueDir, tweetdirectory.Name()) + "\n")
+			sparkfiles, _ := ioutil.ReadDir(filepath.Join(queueDir, tweetdirectory.Name()))
 			for _, sparkfile := range sparkfiles {
-				content, err := ioutil.ReadFile(sparkfile.Name())
+				fmt.Print(filepath.Join(queueDir, tweetdirectory.Name(), sparkfile.Name()) + "\n")
+				content, err := ioutil.ReadFile(filepath.Join(queueDir, tweetdirectory.Name(), sparkfile.Name()))
 				if err != nil {
+					fmt.Print(err)
 					os.Exit(1)
 				}
 				lines := strings.Split(string(content), "\n")
 				for _, sqlstmt := range lines {
-					//db.Exec(sqlstmt)
 					fmt.Print(sqlstmt)
-				}
-				if err != nil {
-					os.Exit(1)
+					_, sterr := db.Exec(sqlstmt)
+					if sterr != nil {
+						fmt.Print(sterr)
+						os.Exit(1)
+					}
+
 				}
 			}
 		}
