@@ -9,30 +9,34 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+    "time"
+    "flag"
 )
 
 var (
 	queueDir = "/tmp/"
+    scanInterval time.Duration
 )
 
 func traverseDirectories() {
 
-	db, err := sql.Open("mysql", "root:everythingisawesome@localhost:3306/seeitremix")
+	db, err := sql.Open("mysql", "root:everythingisawesome@tcp(localhost:3306)/seeitremix")
 	if err != nil {
+        fmt.Print("connection error: ")
 		fmt.Print(err)
 		os.Exit(1)
 	}
 
 	defer db.Close()
 
+for {
 	tweetDirectories, _ := ioutil.ReadDir(queueDir)
 
 	for _, tweetdirectory := range tweetDirectories {
 		if tweetdirectory.IsDir() && strings.Contains(tweetdirectory.Name(), "tweet") {
-			fmt.Print(filepath.Join(queueDir, tweetdirectory.Name()) + "\n")
 			sparkfiles, _ := ioutil.ReadDir(filepath.Join(queueDir, tweetdirectory.Name()))
 			for _, sparkfile := range sparkfiles {
-				fmt.Print(filepath.Join(queueDir, tweetdirectory.Name(), sparkfile.Name()) + "\n")
+                if tweetdirectory.IsDir() && strings.Contains(sparkfile.Name(), "part") && !strings.HasPrefix(sparkfile.Name(), ".") {
 				content, err := ioutil.ReadFile(filepath.Join(queueDir, tweetdirectory.Name(), sparkfile.Name()))
 				if err != nil {
 					fmt.Print(err)
@@ -40,19 +44,26 @@ func traverseDirectories() {
 				}
 				lines := strings.Split(string(content), "\n")
 				for _, sqlstmt := range lines {
-					fmt.Print(sqlstmt)
+                    if strings.Contains(sqlstmt, "INSERT") {
 					_, sterr := db.Exec(sqlstmt)
 					if sterr != nil {
-						fmt.Print(sterr)
-						os.Exit(1)
+                        fmt.Print("statement error=", sterr, "\n")
+                        fmt.Print("sql from file: ", filepath.Join(queueDir, tweetdirectory.Name(), sparkfile.Name()), "\n")
+                        fmt.Print("sql stmt: ", sqlstmt, "\n")
 					}
-
+                  }
 				}
 			}
+        }
+        fmt.Print("Action=RemoveDir, Directory=", tweetdirectory.Name())
 		}
 	}
+    time.Sleep(scanInterval)
+    fmt.Print("Done\n") }
 }
 
 func main() {
+    flag.DurationVar(&scanInterval, "i", time.Duration(5*time.Second), "scan interval")
+    flag.Parse()
 	traverseDirectories()
 }
